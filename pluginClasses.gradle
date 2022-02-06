@@ -1,0 +1,149 @@
+import java.text.MessageFormat
+
+apply plugin: JavaBuildPlugin
+
+/**
+ * Java build plug-in for dalcom lab's AP server project
+ *
+ * @author @author JI-CHOEL HONG(jchong@dalcomlab.com)
+ */
+class JavaBuildPlugin implements Plugin<Project> {
+
+    private Project project
+    private String repoOwner
+    private String projName
+    private String mvnServer
+
+    public static final String PUBLISH_TASK_GROUP_NAME = "dalcomlab-publishing"
+
+    void apply(Project project) {
+        this.project = project
+        repoOwner = (String)project.findProperty("gpr.owner")
+        projName = "maven-repo"
+        mvnServer = (String)project.findProperty("gpr.mvn-server")
+        registerGithubPublishingTasks()
+        registerDalcomPublishingTasks()
+        println "applied JavaBuildPlugin"
+    }
+
+    void registerGithubPublishingTasks() {
+        PublishingExtension ext = (PublishingExtension) project.extensions["publishing"]
+        ext.repositories(new Action<RepositoryHandler>() {
+            @Override
+            void execute(RepositoryHandler artifactRepositories) {
+                artifactRepositories.maven(new Action<MavenArtifactRepository>() {
+                    @Override
+                    void execute(MavenArtifactRepository mavenArtifactRepository) {
+
+                        String repoUrl = MessageFormat.format("https://{0}/{1}/{2}", mvnServer, repoOwner, projName)
+                        mavenArtifactRepository.setName("GitHubPackages")
+                        mavenArtifactRepository.setUrl(new URI(repoUrl))
+                        mavenArtifactRepository.credentials(new Action<PasswordCredentials>() {
+                            @Override
+                            void execute(PasswordCredentials passwordCredentials) {
+
+                                String user = project.ext.getProperty("repo-user")
+                                String password = project.ext.getProperty("repo-token")
+
+                                passwordCredentials.username(user)
+                                passwordCredentials.password(password)
+                            }
+                        })
+                    }
+                })
+            }
+        })
+
+    }
+
+    void registerDalcomPublishingTasks() {
+        project.tasks.register("publishReleaseToGithubPackages", PublishingForReleaseTask.class)
+        project.tasks.register("publishSnapshotToGithubPackages", PublishingForSnapshotTask.class)
+    }
+}
+
+/**
+ * Publishing task for release artifact (jar)
+ *
+ * @author @author JI-CHOEL HONG(jchong@dalcomlab.com)
+ */
+class PublishingForReleaseTask extends DefaultTask {
+
+    PublishingForReleaseTask() {
+        super()
+        this.group = JavaBuildPlugin.PUBLISH_TASK_GROUP_NAME
+
+        Commons.createMavenPublications(project)
+
+        Task publishingTask = project.tasks.findByPath("publishMavenPublicationToGitHubPackagesRepository")
+        project.setVersion(project.getVersion().toString())
+
+        dependsOn(publishingTask)
+    }
+
+    @TaskAction
+    protected void run() {
+        String repoOwner = (String)project.findProperty("gpr.owner")
+        String projName = project.name
+        String mvnServer = (String)project.findProperty("gpr.mvn-server")
+        String msg = MessageFormat.format("java artifact published to maven repo({0}/{1}) >>> {2}-{3}",
+                mvnServer, repoOwner, projName, project.getVersion())
+        System.out.println(msg)
+    }
+}
+
+/**
+ * Publishing task for Snapshot artifact (jar and sources)
+ *
+ * @author @author JI-CHOEL HONG(jchong@dalcomlab.com)
+ */
+class PublishingForSnapshotTask extends DefaultTask {
+
+    PublishingForSnapshotTask() {
+        super()
+        this.group = JavaBuildPlugin.PUBLISH_TASK_GROUP_NAME
+
+        Commons.createMavenPublications(project)
+
+        Task publishingTask = project.tasks.findByPath("publishMavenPublicationToGitHubPackagesRepository")
+        project.setVersion(project.getVersion().toString() + "-SNAPSHOT")
+
+        JavaPluginExtension javaPluginExtension = (JavaPluginExtension) project.extensions["java"]
+        javaPluginExtension.withSourcesJar()
+
+        dependsOn(publishingTask)
+    }
+
+    @TaskAction
+    protected void run() {
+
+        String repoOwner = (String)project.findProperty("gpr.owner")
+        String projName = project.name
+        String mvnServer = (String)project.findProperty("gpr.mvn-server")
+        String msg = MessageFormat.format("java artifact published to maven repo({0}/{1}) >>> {2}-{3}",
+                mvnServer, repoOwner, projName, project.getVersion())
+        System.out.println(msg)
+    }
+}
+
+/**
+ * Common utility class for this plugin classes
+ *
+ * @author @author JI-CHOEL HONG(jchong@dalcomlab.com)
+ */
+class Commons {
+    static void createMavenPublications(Project proj) {
+        PublishingExtension publishingEx = (PublishingExtension) proj.extensions["publishing"]
+        MavenPublication mavenPublication = (MavenPublication)publishingEx.publications.findByName("maven")
+        if ( mavenPublication == null ) {
+            publishingEx.publications.create("maven", MavenPublication.class, new Action<MavenPublication>() {
+                void execute(MavenPublication publication) {
+                    publication.from(proj.getComponents().getByName("java"))
+                    publication.setGroupId(proj.getGroup().toString())
+                    publication.setArtifactId(proj.name)
+                }
+            })
+
+        }
+    }
+}
