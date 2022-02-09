@@ -57,8 +57,11 @@ class JavaBuildPlugin implements Plugin<Project> {
     }
 
     void registerDalcomPublishingTasks() {
+        project.tasks.register("outputBuildPrompt", OutputBuildPromptTask.class)
         project.tasks.register("publishReleaseToGithubPackages", PublishingForReleaseTask.class)
         project.tasks.register("publishSnapshotToGithubPackages", PublishingForSnapshotTask.class)
+        project.tasks.register("publishReleaseToMavenLocal",PublishingLocalForReleaseTask.class)
+        project.tasks.register("publishSnapshotToMavenLocal", PublishingLocalForSnapshotTask.class)
     }
 }
 
@@ -125,6 +128,107 @@ class PublishingForSnapshotTask extends DefaultTask {
         System.out.println(msg)
     }
 }
+
+/**
+ * Publishing task for release artifact (jar) to local repo
+ *
+ * @author @author JI-CHOEL HONG(jchong@dalcomlab.com)
+ */
+class PublishingLocalForReleaseTask extends DefaultTask {
+
+    PublishingLocalForReleaseTask() {
+        super()
+        this.group = JavaBuildPlugin.PUBLISH_TASK_GROUP_NAME
+
+        Commons.createMavenPublications(project)
+
+        Task publishingTask = project.tasks.findByPath("publishToMavenLocal")
+        project.setVersion(project.getVersion().toString())
+
+        dependsOn(publishingTask)
+    }
+
+    @TaskAction
+    protected void run() {
+        String projName = project.name
+        String msg = MessageFormat.format("java artifact published to maven local repo >>> {0}-{1}",
+                projName, project.getVersion())
+        System.out.println(msg)
+    }
+}
+
+/**
+ * Publishing task for Snapshot artifact (jar) to local repo
+ *
+ * @author @author JI-CHOEL HONG(jchong@dalcomlab.com)
+ */
+class PublishingLocalForSnapshotTask extends DefaultTask {
+
+    PublishingLocalForSnapshotTask() {
+        super()
+        this.group = JavaBuildPlugin.PUBLISH_TASK_GROUP_NAME
+
+        Commons.createMavenPublications(project)
+
+        Task publishingTaskForLocal = project.tasks.findByPath("publishToMavenLocal")
+        project.setVersion(project.getVersion().toString() + "-SNAPSHOT")
+
+        JavaPluginExtension javaPluginExtension = (JavaPluginExtension) project.extensions["java"]
+        javaPluginExtension.withSourcesJar()
+
+        dependsOn(publishingTaskForLocal)
+    }
+
+    @TaskAction
+    protected void run() {
+
+        String projName = project.name
+        String msg = MessageFormat.format("java artifact published to maven local repo >>> {0}-{1}",
+                projName, project.getVersion())
+        System.out.println(msg)
+    }
+}
+
+/**
+ * Output build signal prompt and project properties.
+ *
+ * @author @author JI-CHOEL HONG(jchong@dalcomlab.com)
+ */
+class OutputBuildPromptTask extends DefaultTask {
+
+    OutputBuildPromptTask() {
+        super()
+        this.group = JavaBuildPlugin.PUBLISH_TASK_GROUP_NAME
+        Task buildTask = project.tasks.findByPath("build")
+        buildTask.mustRunAfter(this)
+    }
+
+    @TaskAction
+    protected void run() {
+        try {
+            URL url = new URL("https://raw.githubusercontent.com/dalcomlab-team/plugin-repo/main/buildPrompt.txt")
+            // read text returned by server
+            BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream()))
+            String line
+            while ((line = reader.readLine()) != null) {
+                System.out.println(line)
+            }
+            reader.close()
+        } catch (IOException ignored) {
+            // NO-OP
+        }
+
+        System.out.println("Check gradle.properties")
+
+        for (Map.Entry<String, ?> entry : project.properties.entrySet()) {
+            if (entry.getKey().contains("gpr.")) {
+                System.out.println(MessageFormat.format(" {0} >>> {1}", entry.getKey(), entry.getValue()))
+            }
+        }
+        System.out.println("")
+    }
+}
+
 
 /**
  * Common utility class for this plugin classes
