@@ -206,7 +206,7 @@ class OutputBuildPromptTask extends DefaultTask {
     @TaskAction
     protected void run() {
         try {
-            URL url = new URL("https://raw.githubusercontent.com/dalcomlab-team/plugin-repo/main/buildPrompt.txt")
+            URL url = new URL("https://raw.githubusercontent.com/dalcomlab/plugin-repo/main/buildPrompt.txt")
             // read text returned by server
             BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream()))
             String line
